@@ -5,24 +5,6 @@
 # This code is used to ingest outputs from Lunaphore's Horizon analysis software for use with pythologist. 
 # It converts the output from Horizon into a pythologist CellDataFrame for further use in our pipelines. 
 
-# v2 update: December 27, 2024
-# Harry's Horizon outputs had area and cells dataframes combined in one file. 
-# The area data is the first row(s). 
-# Then the cells data is after that. 
-# Some columns are only used by one or the other. 
-# Let's make a function to optionally take the one file version as input and split them into cells and area dataframes for further processing. 
-
-# v3 update: March 2025
-# Removing cells within the "Exclusion" Class group
-
-# v4 update: April 2025
-# Removing cells within the "Exclusion" Class group and removing excluded areas, handling a few different options. 
-# Main Annotation will encompass the entire tissue. 
-# Polygon Exclusion Annotations: will overlap excluded cells, area of polygon will be subtracted from the Main area.
-# Rectangle Exclusion Annotations: will overlap excluded cells, area of rectangles will be subtracted from the Main area.
-# If Rectangle Exclusion Annotations overlap, will include an "Overlap" Rectangle which will be added back to the Main area.
-
-# v5 update: April 28 2025
 # Uses nested annotations indicated by a naming protocol in the Annotation Group column. 
 # [annotation type]_[main id].[roi id].[exclusion id]_[shape type]
 # Main_1.0.0_Rectangle
@@ -613,9 +595,23 @@ def ingest_Lunaphore(df,
     # --------------------------------------------------------------------
     # Process Thresholds
     # subset meta to name mappings for Threshold (calls)
-    call_name_mappings = meta.loc[(meta['Compartment_Type'].isin(['Cell', 'Nucleus', 'Annotation'])) & (meta['Measurement_Type']!='Mean Intensity')]
-    # don't want to keep nucleus area...
-    call_name_mappings = call_name_mappings.loc[~((call_name_mappings['Compartment_Type']=='Nucleus') & (call_name_mappings['Measurement_Type']=='cell_area'))]
+    # Check for markers with multiple threshold compartments
+    threshold_meta = meta.loc[meta['Measurement_Type'] == 'Threshold']
+    marker_compartments = threshold_meta.groupby('Marker')['Compartment_Type'].nunique()
+    multi_compartment_markers = marker_compartments[marker_compartments > 1]
+    if not multi_compartment_markers.empty:
+        warnings.warn(
+            f"---------------------------------------------------------\n"
+            f"The following markers have thresholds in multiple compartments: {list(multi_compartment_markers.index)}\n"
+            f"This may cause unexpected behavior. Only one threshold per marker is typically used.\n"
+            f"---------------------------------------------------------"
+        )
+        offending_markers_df = threshold_meta[threshold_meta['Marker'].isin(multi_compartment_markers.index)][['Marker', 'Compartment_Type', 'orig_cols']].sort_values('Marker')
+        warnings.warn(f"Offending markers and their compartments:\n{offending_markers_df.to_string()}")
+
+    call_name_mappings = meta.loc[(meta['Compartment_Type'].isin(['Cell', 'Nucleus', 'Cytoplasm', 'Annotation'])) & (meta['Measurement_Type']!='Mean Intensity')]
+    # don't want to keep nucleus or cytoplasm areas...
+    call_name_mappings = call_name_mappings.loc[~((call_name_mappings['Compartment_Type'].isin(['Nucleus','Cytoplasm'])) & (call_name_mappings['Measurement_Type']=='cell_area'))]
     
     # make column name remapping dict
     calls_remapping_dict = dict(zip(call_name_mappings['orig_cols'], call_name_mappings['Label_Mapping']))
