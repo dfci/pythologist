@@ -15,6 +15,9 @@
 # Changes:
 # Update 2026/04/06: Adjust microns to pixel conversion so that is it not hard coded. Also transform microns into pixels
 
+# TODO: process single cell data the same way the cdf is processed
+
+
 import pandas as pd
 import numpy as np
 import uuid
@@ -224,6 +227,7 @@ def run_lunaphore_ingestion(horizon_export_filepath,
     if overwrite_sample_name is not None:
         cdf['sample_name'] = overwrite_sample_name
     else:
+        # TODO: is this line broken?
         cdf['sample_name'] = cdf['Annotation Group'].split('/')[1]
     # Combine sample_name with Parent Annotation (current frame_name) to get the updated frame_name
     cdf['frame_name'] = cdf['sample_name'] + '_' + cdf['frame_name']
@@ -366,7 +370,8 @@ def add_region_areas(cells_df, area_df, microns_per_pixel):
     cells_df['region_label'] = 'ANY'
     # convert areas from microns into pixels, which is expected by pythologst. 
     # area_pixles2 = area_microns2*((1/microns_per_pixel)**2)
-    area_df['Area_pixels_squared'] = area_df['Area in μm²'].apply(lambda x: round(x*((1/microns_per_pixel)**2), 3))
+    area_df['Area_pixels_squared'] = area_df['Area in μm²'].apply(
+        lambda x: round(microns2_to_pixels2(x, microns_per_pixel), 3))
     # Extract dictionary of region areas using ANY as region label
     region_areas_dict = dict(zip(area_df['region_label'],area_df['Area_pixels_squared']))
     # put this region areas dict into the regions column. It'll be the same value for every row. 
@@ -389,9 +394,9 @@ def extract_column_metadata(cells_df):
     measurement_type_map = {
         'Annotation Group':'Annotation Group',
         'Annotation Index':'cell_index',
-        'X Position':'x',
-        'Y Position':'y',
-        'Area':'cell_area',
+        'X Position in μm':'x',
+        'Y Position in μm':'y',
+        'Area in μm²':'cell_area',
         'Mean Intensity':'Mean Intensity',
         'Threshold':'Threshold',
         'regions':'regions',
@@ -415,13 +420,13 @@ def extract_column_metadata(cells_df):
     # Extract Measurement Type
     df['Measurement_Type'] = ''
     for k,v in measurement_type_map.items():
-        df.loc[df['orig_cols'].str.contains(k), 'Measurement_Type'] = v
+        df.loc[df['orig_cols'].str.contains(k, regex=False, na=False), 'Measurement_Type'] = v
     
     # ----------------------------
     # Extract Compartment Type
     df['Compartment_Type'] = ''
     for k,v in compartment_type_map.items():
-        df.loc[df['orig_cols'].str.contains(k), 'Compartment_Type'] = v
+        df.loc[df['orig_cols'].str.contains(k, regex=False, na=False), 'Compartment_Type'] = v
     
     # ----------------------------
     # Extract Marker Label
@@ -438,7 +443,7 @@ def extract_column_metadata(cells_df):
                             temp_marker_df2_nucleus.iloc[:, 0], 
                             temp_marker_df2.iloc[:, 0])
     # manually edit DAPI
-    df.loc[df['orig_cols'].str.contains('DAPI'),'Marker'] = 'DAPI'
+    df.loc[df['orig_cols'].str.contains('DAPI', regex=False, na=False),'Marker'] = 'DAPI'
     # get just the first part of Marker...
     # some don't already have _ so we add one just in case
     df['Marker'] = df['Marker'] + '_'
@@ -486,7 +491,7 @@ def extract_column_metadata(cells_df):
                              temp_marker_df3.iloc[:, 0])
 
     # manually edit DAPI
-    df.loc[df['orig_cols'].str.contains('DAPI'),'Channel'] = 'DAPI'
+    df.loc[df['orig_cols'].str.contains('DAPI', regex=False, na=False),'Channel'] = 'DAPI'
     
     # ----------------------------
     # Extract Thresholds
@@ -508,7 +513,7 @@ def extract_column_metadata(cells_df):
     df.loc[(df['orig_cols'].str.contains('Position')) & (df['orig_cols'].str.contains('Threshold')),'Measurement_Type'] = 'Position Threshold'
     # By default let's use x and y positions of Cell (should be same as nuclei anyway)
     # so let's set Measurement_Type of the nucelei x and y to something specific...
-    df.loc[(df['orig_cols'].str.contains('X Position')) & (df['orig_cols'].str.contains('Nuclei')),'Measurement_Type'] = 'nucleus_x'
+    df.loc[(df['orig_cols'].str.contains('X Position in μm')) & (df['orig_cols'].str.contains('Nuclei')),'Measurement_Type'] = 'nucleus_x'
     df.loc[(df['orig_cols'].str.contains('Y Position')) & (df['orig_cols'].str.contains('Nuclei')),'Measurement_Type'] = 'nucleus_y'
     # manually set Marker name to nan for these
     df.loc[(df['orig_cols'].str.contains('Area')) & (df['orig_cols'].str.contains('Threshold')),'Marker'] = np.nan
@@ -572,6 +577,28 @@ def ingest_Lunaphore(df,
     df_vals = df_vals.rename(columns = vals_remapping_dict)
     print('values columns renamed')
     print(list(df_vals.columns))
+
+    # ---------------------------------------------------------
+    # Convert spatial measurements from microns to pixels
+    # x, y are in microns -> pixels
+    # cell_area is in μm² -> pixels²
+    if 'x' in df_vals.columns:
+        df_vals['x'] = df_vals['x'].apply(lambda v: microns_to_pixels(v, microns_per_pixel) if pd.notna(v) else v)
+
+    if 'y' in df_vals.columns:
+        df_vals['y'] = df_vals['y'].apply(lambda v: microns_to_pixels(v, microns_per_pixel) if pd.notna(v) else v)
+
+    if 'cell_area' in df_vals.columns:
+        df_vals['cell_area'] = df_vals['cell_area'].apply(lambda v: microns2_to_pixels2(v, microns_per_pixel) if pd.notna(v) else v)
+    
+    # TODO: makes sure this is applied correctly for single cell data. 
+    # TODO: do we want to do nuclear area too?
+    if 'nucleus_x' in df_vals.columns:
+    df_vals['nucleus_x'] = df_vals['nucleus_x'].apply(lambda v: microns_to_pixels(v, microns_per_pixel) if pd.notna(v) else v)
+
+    if 'nucleus_y' in df_vals.columns:
+        df_vals['nucleus_y'] = df_vals['nucleus_y'].apply(lambda v: microns_to_pixels(v, microns_per_pixel) if pd.notna(v) else v)
+    # ---------------------------------------------------------   
     
     # Use these columns for index
     if 'Leiden clusters' in df_vals.columns:
@@ -682,7 +709,11 @@ def ingest_Lunaphore(df,
     df_merge['project_id'] = uuid.uuid4().hex
     df_merge['sample_id'] = uuid.uuid4().hex
     # I should calculate this using the minimum and maximum cell centroid locations for each ROI...
-    df_merge['frame_shape'] = df_merge['region_label'].apply(lambda x: tuple([1000,1000]))
+    # TODO: do we want this in pixels or microns? Is this implemented correctly?
+    # df_merge['frame_shape'] = df_merge['region_label'].apply(lambda x: tuple([1000,1000]))
+    width_px = int(np.ceil(df_merge['x'].max())) + 1 if 'x' in df_merge.columns else 1000
+    height_px = int(np.ceil(df_merge['y'].max())) + 1 if 'y' in df_merge.columns else 1000
+    df_merge['frame_shape'] = [(height_px, width_px)] * len(df_merge)
     
     # convert to pythologist CellDataFrame
     cdf = CellDataFrame(df_merge)
@@ -716,14 +747,17 @@ def extract_roi_measures(cdf, meta, microns_per_pixel=0.28):
         return gini
 
     # Cell Areas, in millimeters squared
-    cell_area_mean = cdf['cell_area'].mean() * 0.000001
-    cell_area_median = cdf['cell_area'].median() * 0.000001
-    cell_area_min = cdf['cell_area'].min() * 0.000001
-    cell_area_max = cdf['cell_area'].max() * 0.000001
-    cell_area_std = (cdf['cell_area'] * 0.000001).std()
-    cell_area_skew = (cdf['cell_area'] * 0.000001).skew()
-    cell_area_kurtosis = (cdf['cell_area'] * 0.000001).kurtosis()
-    cell_area_gini = gini_coefficient((cdf['cell_area'] * 0.000001).values)
+    cell_area_um2 = cdf['cell_area'] * (microns_per_pixel ** 2)
+    cell_area_mm2 = cell_area_um2 * 0.000001
+    #
+    cell_area_mean = cell_area_mm2.mean()
+    cell_area_median = cell_area_mm2.median()
+    cell_area_min = cell_area_mm2.min()
+    cell_area_max = cell_area_mm2.max()
+    cell_area_std = cell_area_mm2.std()
+    cell_area_skew = cell_area_mm2.skew()
+    cell_area_kurtosis = cell_area_mm2.kurtosis()
+    cell_area_gini = gini_coefficient(cell_area_mm2.values)
 
     # Imports
     import ast
@@ -954,3 +988,42 @@ def export_comprehensive_single_cell(temp_input_cells, cdf, savefile_dir, savefi
     print(f"Comprehensive single-cell data successfully saved to: {savefile_path}")
 
     return full_sc_data
+
+
+
+
+def microns_to_pixels(value_um, microns_per_pixel):
+    """
+    Converts a length in microns to pixels using the provided microns per pixel scaling factor.
+    value_um = length in microns
+    microns_per_pixel = scaling factor (microns/pixel)
+    returns length in pixels
+    """
+    return value_um / microns_per_pixel
+
+def microns2_to_pixels2(value_um2, microns_per_pixel):
+    """
+    Converts an area in microns squared to pixels squared using the provided microns per pixel scaling factor.
+    value_um2 = area in microns squared
+    microns_per_pixel = scaling factor (microns/pixel)
+    returns area in pixels squared
+    """
+    return value_um2 / (microns_per_pixel ** 2)
+
+def pixels_to_microns(value_px, microns_per_pixel):
+    """
+    Converts a length in pixels to microns using the provided microns per pixel scaling factor.
+    value_px = length in pixels
+    microns_per_pixel = scaling factor (microns/pixel)
+    returns length in microns
+    """
+    return value_px * microns_per_pixel
+
+def pixels2_to_microns2(value_px2, microns_per_pixel):
+    """
+    Converts an area in pixels squared to microns squared using the provided microns per pixel scaling factor.
+    value_px2 = area in pixels squared
+    microns_per_pixel = scaling factor (microns/pixel)
+    returns area in microns squared
+    """
+    return value_px2 * (microns_per_pixel ** 2)
