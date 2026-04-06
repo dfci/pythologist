@@ -1,4 +1,4 @@
-# December 20, 2024
+# April 6th, 2026
 # Ian Dryg
 # Dana-Farber Cancer Institute
 # Center for Immuno-Oncology
@@ -11,6 +11,9 @@
 # ROI_1.1.0_Polygon - the first ROI within the Main 1 annotation
 # ROI_1.2.0_Polygon - the second ROI within the Main 1 annotation
 # Exclusion_1.1.1_Polygon - the first Exclusion within ROI 1 within Main 1
+
+# Changes:
+# Update 2026/04/06: Adjust microns to pixel conversion so that is it not hard coded. Also transform microns into pixels
 
 import pandas as pd
 import numpy as np
@@ -205,7 +208,7 @@ def run_lunaphore_ingestion(horizon_export_filepath,
                                meta_dict[curr_annot], 
                                proj_name=project_name, 
                                default_phenotype=default_phenotype, 
-                               microns_per_pixel=0.28,
+                               microns_per_pixel=microns_per_pixel,
                                overwrite_sample_name = overwrite_sample_name)
 
         # add cdf to the cdf_dict
@@ -253,7 +256,7 @@ def run_lunaphore_ingestion(horizon_export_filepath,
         curr_meta = meta_dict[curr_roi]
         # extract measures for current roi
         # outputs: roi_measures_wideform, roi_measures_longform
-        curr_roi_measures_wide, curr_roi_measures_long = extract_roi_measures(cdf_sub, curr_meta, microns_per_pixel=0.28)
+        curr_roi_measures_wide, curr_roi_measures_long = extract_roi_measures(cdf_sub, curr_meta, microns_per_pixel=microns_per_pixel)
         # add roi_measures to the list
         roi_measures_list_wide.append(curr_roi_measures_wide)
         roi_measures_list_long.append(curr_roi_measures_long)
