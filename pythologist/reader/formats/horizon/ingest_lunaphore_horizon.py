@@ -956,7 +956,7 @@ def _create_consistent_column_name(row):
         elif compartment == 'Cytoplasm':
             return 'cytoplasm_area'
         else:
-            return 'cell_area'
+            return 'cell_area_um2_raw'
         
 
     if measurement == 'nucleus_x':
@@ -1091,6 +1091,17 @@ def export_comprehensive_single_cell(temp_input_cells, cdf, savefile_dir, savefi
         full_sc_data['cell_area_um2'] = full_sc_data['cell_area'].apply(
             lambda v: pixels2_to_microns2(v, microns_per_pixel) if pd.notna(v) else v
         )
+    
+    # Also convert raw cell micron coordinates to pixels for comparison
+    if 'x_um_raw' in full_sc_data.columns:
+        full_sc_data['x_raw_pixels'] = full_sc_data['x_um_raw'].apply(
+            lambda v: microns_to_pixels(v, microns_per_pixel) if pd.notna(v) else v
+        )
+
+    if 'y_um_raw' in full_sc_data.columns:
+        full_sc_data['y_raw_pixels'] = full_sc_data['y_um_raw'].apply(
+            lambda v: microns_to_pixels(v, microns_per_pixel) if pd.notna(v) else v
+        )
 
     # ------------------------------------------------------------------
     # 6. If raw nucleus/cytoplasm columns exist in micron units after renaming,
@@ -1119,7 +1130,8 @@ def export_comprehensive_single_cell(temp_input_cells, cdf, savefile_dir, savefi
     cols_to_round = [
         'x', 'y', 'cell_area',
         'x_pixels', 'y_pixels', 'cell_area_pixels2',
-        'x_um', 'y_um', 'cell_area_um2'
+        'x_um', 'y_um', 'cell_area_um2',
+        'x_raw_pixels', 'y_raw_pixels'
     ]
     cols_to_round += [c for c in full_sc_data.columns if c.endswith('_pixels')]
     cols_to_round += [c for c in full_sc_data.columns if c.endswith('_pixels2')]
@@ -1151,6 +1163,10 @@ def export_comprehensive_single_cell(temp_input_cells, cdf, savefile_dir, savefi
         'cell_area_pixels2',
         'x_um',
         'y_um',
+        'x_um_raw',
+        'y_um_raw',
+        'x_raw_pixels',
+        'y_raw_pixels',
         'cell_area_um2',
         'region_label',
         'regions',
