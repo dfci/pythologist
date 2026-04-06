@@ -16,6 +16,7 @@
 # Update 2026/04/06: Adjust microns to pixel conversion so that is it not hard coded. Also transform microns into pixels
 
 # TODO: process single cell data the same way the cdf is processed
+# TODO: are we happy with what intensity value is grabbed for each marker? Default b
 
 
 import pandas as pd
@@ -229,7 +230,8 @@ def run_lunaphore_ingestion(horizon_export_filepath,
     else:
         # TODO: is this line broken?
         # cdf['sample_name'] = cdf['Annotation Group'].split('/')[1]
-        cdf['sample_name'] = cdf['Annotation Group'].iloc[0].split('/')[1]
+        # cdf['sample_name'] = cdf['Annotation Group'].iloc[0].split('/')[1]
+        cdf['sample_name'] = cdf['Annotation Group'].str.split('/').str[1]
     # Combine sample_name with Parent Annotation (current frame_name) to get the updated frame_name
     cdf['frame_name'] = cdf['sample_name'] + '_' + cdf['frame_name']
     # set microns_per_pixel for combined cdf
@@ -278,7 +280,8 @@ def run_lunaphore_ingestion(horizon_export_filepath,
 
     # Export Full Single Cell Data if requested
     if save_full_single_cell:
-        export_comprehensive_single_cell(temp_input_cells, cdf, savefile_dir, savefile_name)
+        export_comprehensive_single_cell(temp_input_cells, cdf, savefile_dir, savefile_name,
+                                         microns_per_pixel=microns_per_pixel)
 
     if return_cdf:
         return cdf
@@ -573,7 +576,7 @@ def ingest_Lunaphore(df,
     # get list of columns to keep 
     vals_cols_keep = list(value_name_mappings['orig_cols'])
     # subset data to include only values columns
-    df_vals = df[vals_cols_keep]
+    df_vals = df[vals_cols_keep].copy()
     print('values columns subset')
     df_vals = df_vals.rename(columns = vals_remapping_dict)
     print('values columns renamed')
@@ -649,7 +652,7 @@ def ingest_Lunaphore(df,
     # get list of columns to keep 
     calls_cols_keep = list(call_name_mappings['orig_cols'])
     # subset data to include only threshold columns
-    df_calls = df[calls_cols_keep]
+    df_calls = df[calls_cols_keep].copy()
     print('calls columns subset')
     df_calls = df_calls.rename(columns = calls_remapping_dict)
     print('calls columns renamed')
@@ -925,6 +928,42 @@ def _create_consistent_column_name(row):
     # Standardize compartment names
     if compartment == 'Nuclei': compartment = 'Nucleus'
     elif compartment == 'Cells': compartment = 'Cell'
+    elif compartment == 'Cytoplasm': compartment = 'Cytoplasm'
+
+    # ---------------------------------------------------------
+    # Minimal special handling so exported single-cell names
+    # match what export_comprehensive_single_cell() expects
+    # ---------------------------------------------------------
+    if measurement == 'x':
+        if compartment == 'Nucleus':
+            return 'nucleus_x'
+        elif compartment == 'Cytoplasm':
+            return 'cytoplasm_x'
+        else:
+            return 'x_um_raw'
+    
+    if measurement == 'y':
+        if compartment == 'Nucleus':
+            return 'nucleus_y'
+        elif compartment == 'Cytoplasm':
+            return 'cytoplasm_y'
+        else:
+            return 'y_um_raw'
+    
+    if measurement == 'cell_area':
+        if compartment == 'Nucleus':
+            return 'nucleus_area'
+        elif compartment == 'Cytoplasm':
+            return 'cytoplasm_area'
+        else:
+            return 'cell_area'
+        
+
+    if measurement == 'nucleus_x':
+        return 'nucleus_x'
+    if measurement == 'nucleus_y':
+        return 'nucleus_y'
+
 
     parts = []
     if pd.notna(compartment) and compartment != 'Annotation':
@@ -932,10 +971,12 @@ def _create_consistent_column_name(row):
 
     # Standardize measurement names
     measurement_map = {
-        'cell_area': 'Area_um2', 'x': 'X_Position_Cell_um', 'y': 'Y_Position_Cell_um',
-        'Mean Intensity': 'MeanIntensity', 'Threshold': 'Threshold',
-        'nucleus_x': 'X_Position_Nucleus_um', 'nucleus_y': 'Y_Position_Nucleus_um',
-        'Area Threshold': 'Area_Threshold', 'Position Threshold': 'Position_Threshold'
+        # 'cell_area': 'Area_um2', 'x': 'X_Position_Cell_um', 'y': 'Y_Position_Cell_um',
+        'Mean Intensity': 'MeanIntensity', 
+        'Threshold': 'Threshold',
+        # 'nucleus_x': 'X_Position_Nucleus_um', 'nucleus_y': 'Y_Position_Nucleus_um',
+        'Area Threshold': 'Area_Threshold', 
+        'Position Threshold': 'Position_Threshold'
     }
     if measurement in measurement_map:
         parts.append(measurement_map[measurement])
@@ -952,45 +993,187 @@ def _create_consistent_column_name(row):
 # =========================================================================
 # NEW FUNCTION: Export Comprehensive Single Cell Data
 # =========================================================================
-def export_comprehensive_single_cell(temp_input_cells, cdf, savefile_dir, savefile_name):
+def export_comprehensive_single_cell(temp_input_cells, cdf, savefile_dir, savefile_name, microns_per_pixel=0.28):
     """
-    Merges Pythologist CDF metadata back onto the full single-cell dataset,
-    renames columns for consistency, and exports to CSV.
-    """
+    Export a comprehensive single-cell table that:
+    1) merges processed CDF metadata back onto raw Horizon single-cell data
+    2) renames columns to be more CDF-like
+    3) includes x, y, and cell_area in both pixels and microns
     
-    # 1. Select Pythologist identifier columns to merge
-    cdf_meta = cdf[['cell_index', 'Annotation Group', 'Parent Annotation',
-                    'sample_name', 'frame_name', 'project_name',
-                    'sample_id', 'project_id', 'frame_id']].copy()
-    # 2. Prepare the raw single-cell data for merging
+    temp_input_cells: the raw single-cell dataframe output from Lunaphore Horizon, before any processing
+    cdf: the processed CellDataFrame that has been ingested and processed in pythologist, which contains the final metadata and identifiers for each cell
+    savefile_dir: directory to save the output CSV file
+    savefile_name: name of the output CSV file (without extension)
+    microns_per_pixel: scaling factor for converting between microns and pixels
+    """
+   
+    # ------------------------------------------------------------------
+    # 1. Pull useful processed CDF columns
+    # ------------------------------------------------------------------
+    cdf_meta_cols = [
+        'cell_index',
+        'Annotation Group',
+        'Parent Annotation',
+        'sample_name',
+        'frame_name',
+        'project_name',
+        'sample_id',
+        'project_id',
+        'frame_id',
+        'region_label',
+        'regions',
+        'frame_shape',
+        'neighbors',
+        'channel_values',
+        'scored_calls',
+        'phenotype_calls',
+        'phenotype_label',
+        'x',
+        'y',
+        'cell_area'
+    ]
+    cdf_meta_cols = [c for c in cdf_meta_cols if c in cdf.columns]
+
+    cdf_meta = cdf[cdf_meta_cols].copy()
+
+    merge_keys = ['cell_index', 'Annotation Group', 'Parent Annotation']
+    cdf_meta = cdf_meta.drop_duplicates(subset=merge_keys)
+
+    # ------------------------------------------------------------------
+    # 2. Prepare raw single-cell table
+    # ------------------------------------------------------------------
     temp_full = temp_input_cells.copy()
     temp_full = temp_full.rename(columns={
         'Annotation Index': 'cell_index',
         'parent_id': 'Parent Annotation'
     })
 
-    # 3. Inner merge to align with Pythologist identifiers. This filters out
-    #    any cells not present in the final CDF (e.g., Exclusions).
-    full_sc_data = pd.merge(cdf_meta, temp_full,
-                            on=['cell_index', 'Annotation Group', 'Parent Annotation'],
-                            how='inner')
+    # ------------------------------------------------------------------
+    # 3. Merge processed CDF data onto raw full single-cell data
+    # ------------------------------------------------------------------
+    full_sc_data = pd.merge(
+        cdf_meta,
+        temp_full,
+        on=merge_keys,
+        how='inner'
+    )
 
-    # 4. Generate metadata from column names to create a renaming map
+    # ------------------------------------------------------------------
+    # 4. Rename raw Horizon columns into more CDF-like naming
+    # ------------------------------------------------------------------
     sc_meta = extract_column_metadata(full_sc_data)
-    rename_dict = {row['orig_cols']: _create_consistent_column_name(row) 
-                   for _, row in sc_meta.iterrows()}
 
-    # 5. Rename the columns for consistency
-    full_sc_data.rename(columns=rename_dict, inplace=True)
+    rename_dict = {
+        row['orig_cols']: _create_consistent_column_name(row)
+        for _, row in sc_meta.iterrows()
+    }
 
-    # 6. Save to CSV
+    full_sc_data = full_sc_data.rename(columns=rename_dict)
+
+    # ------------------------------------------------------------------
+    # 5. Add explicit pixel and micron versions of CDF spatial columns
+    #    CDF x, y, cell_area are already in pixels / pixels²
+    # ------------------------------------------------------------------
+    if 'x' in full_sc_data.columns:
+        full_sc_data['x_pixels'] = full_sc_data['x']
+        full_sc_data['x_um'] = full_sc_data['x'].apply(
+            lambda v: pixels_to_microns(v, microns_per_pixel) if pd.notna(v) else v
+        )
+
+    if 'y' in full_sc_data.columns:
+        full_sc_data['y_pixels'] = full_sc_data['y']
+        full_sc_data['y_um'] = full_sc_data['y'].apply(
+            lambda v: pixels_to_microns(v, microns_per_pixel) if pd.notna(v) else v
+        )
+
+    if 'cell_area' in full_sc_data.columns:
+        full_sc_data['cell_area_pixels2'] = full_sc_data['cell_area']
+        full_sc_data['cell_area_um2'] = full_sc_data['cell_area'].apply(
+            lambda v: pixels2_to_microns2(v, microns_per_pixel) if pd.notna(v) else v
+        )
+
+    # ------------------------------------------------------------------
+    # 6. If raw nucleus/cytoplasm columns exist in micron units after renaming,
+    #    add pixel versions too
+    # ------------------------------------------------------------------
+    extra_length_um_cols = ['nucleus_x', 'nucleus_y', 'cytoplasm_x', 'cytoplasm_y']
+    extra_area_um_cols = ['nucleus_area', 'cytoplasm_area']
+
+    for col in extra_length_um_cols:
+        if col in full_sc_data.columns:
+            full_sc_data[col + '_pixels'] = full_sc_data[col].apply(
+                lambda v: microns_to_pixels(v, microns_per_pixel) if pd.notna(v) else v
+            )
+            full_sc_data[col + '_um'] = full_sc_data[col]
+
+    for col in extra_area_um_cols:
+        if col in full_sc_data.columns:
+            full_sc_data[col + '_pixels2'] = full_sc_data[col].apply(
+                lambda v: microns2_to_pixels2(v, microns_per_pixel) if pd.notna(v) else v
+            )
+            full_sc_data[col + '_um2'] = full_sc_data[col]
+
+    # ------------------------------------------------------------------
+    # 7. Round numeric unit-converted columns
+    # ------------------------------------------------------------------
+    cols_to_round = [
+        'x', 'y', 'cell_area',
+        'x_pixels', 'y_pixels', 'cell_area_pixels2',
+        'x_um', 'y_um', 'cell_area_um2'
+    ]
+    cols_to_round += [c for c in full_sc_data.columns if c.endswith('_pixels')]
+    cols_to_round += [c for c in full_sc_data.columns if c.endswith('_pixels2')]
+    cols_to_round += [c for c in full_sc_data.columns if c.endswith('_um')]
+    cols_to_round += [c for c in full_sc_data.columns if c.endswith('_um2')]
+
+    cols_to_round = [c for c in cols_to_round if c in full_sc_data.columns]
+    if cols_to_round:
+        full_sc_data[cols_to_round] = full_sc_data[cols_to_round].round(4)
+
+    # ------------------------------------------------------------------
+    # 8. Reorder columns so processed/CDF-like fields come first
+    # ------------------------------------------------------------------
+    preferred_first = [
+        'cell_index',
+        'Annotation Group',
+        'Parent Annotation',
+        'sample_name',
+        'frame_name',
+        'project_name',
+        'sample_id',
+        'project_id',
+        'frame_id',
+        'x',
+        'y',
+        'cell_area',
+        'x_pixels',
+        'y_pixels',
+        'cell_area_pixels2',
+        'x_um',
+        'y_um',
+        'cell_area_um2',
+        'region_label',
+        'regions',
+        'frame_shape',
+        'neighbors',
+        'phenotype_label',
+        'phenotype_calls',
+        'scored_calls',
+        'channel_values'
+    ]
+    preferred_first = [c for c in preferred_first if c in full_sc_data.columns]
+
+    remaining_cols = [c for c in full_sc_data.columns if c not in preferred_first]
+    full_sc_data = full_sc_data[preferred_first + remaining_cols]
+
+    # ------------------------------------------------------------------
+    # 9. Save
+    # ------------------------------------------------------------------
     savefile_path = os.path.join(savefile_dir, savefile_name + '_full_single_cell.csv')
     full_sc_data.to_csv(savefile_path, index=False)
     print(f"Comprehensive single-cell data successfully saved to: {savefile_path}")
 
     return full_sc_data
-
-
 
 
 def microns_to_pixels(value_um, microns_per_pixel):
