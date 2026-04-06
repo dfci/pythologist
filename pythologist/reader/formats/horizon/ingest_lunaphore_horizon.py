@@ -228,7 +228,8 @@ def run_lunaphore_ingestion(horizon_export_filepath,
         cdf['sample_name'] = overwrite_sample_name
     else:
         # TODO: is this line broken?
-        cdf['sample_name'] = cdf['Annotation Group'].split('/')[1]
+        # cdf['sample_name'] = cdf['Annotation Group'].split('/')[1]
+        cdf['sample_name'] = cdf['Annotation Group'].iloc[0].split('/')[1]
     # Combine sample_name with Parent Annotation (current frame_name) to get the updated frame_name
     cdf['frame_name'] = cdf['sample_name'] + '_' + cdf['frame_name']
     # set microns_per_pixel for combined cdf
@@ -514,9 +515,9 @@ def extract_column_metadata(cells_df):
     # By default let's use x and y positions of Cell (should be same as nuclei anyway)
     # so let's set Measurement_Type of the nucelei x and y to something specific...
     df.loc[(df['orig_cols'].str.contains('X Position in μm')) & (df['orig_cols'].str.contains('Nuclei')),'Measurement_Type'] = 'nucleus_x'
-    df.loc[(df['orig_cols'].str.contains('Y Position')) & (df['orig_cols'].str.contains('Nuclei')),'Measurement_Type'] = 'nucleus_y'
+    df.loc[(df['orig_cols'].str.contains('Y Position in μm')) & (df['orig_cols'].str.contains('Nuclei')),'Measurement_Type'] = 'nucleus_y'
     # manually set Marker name to nan for these
-    df.loc[(df['orig_cols'].str.contains('Area')) & (df['orig_cols'].str.contains('Threshold')),'Marker'] = np.nan
+    df.loc[(df['orig_cols'].str.contains('Area in μm²')) & (df['orig_cols'].str.contains('Threshold')),'Marker'] = np.nan
     df.loc[(df['orig_cols'].str.contains('Position')) & (df['orig_cols'].str.contains('Threshold')),'Marker'] = np.nan
     
     # ----------------------------
@@ -594,7 +595,7 @@ def ingest_Lunaphore(df,
     # TODO: makes sure this is applied correctly for single cell data. 
     # TODO: do we want to do nuclear area too?
     if 'nucleus_x' in df_vals.columns:
-    df_vals['nucleus_x'] = df_vals['nucleus_x'].apply(lambda v: microns_to_pixels(v, microns_per_pixel) if pd.notna(v) else v)
+        df_vals['nucleus_x'] = df_vals['nucleus_x'].apply(lambda v: microns_to_pixels(v, microns_per_pixel) if pd.notna(v) else v)
 
     if 'nucleus_y' in df_vals.columns:
         df_vals['nucleus_y'] = df_vals['nucleus_y'].apply(lambda v: microns_to_pixels(v, microns_per_pixel) if pd.notna(v) else v)
