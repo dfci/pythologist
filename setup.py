@@ -33,8 +33,8 @@ setup(
       'schema_data/inputs/platforms/InForm/*.json'
     ]
   },
-  install_requires=['pandas>=2.2.0',
-                    'numpy>=1.26.3',
+  install_requires=['pandas==2.3.3',
+                    'numpy==1.26.4',
                     'scipy',
                     'h5py',
                     'imageio',
