@@ -50,7 +50,7 @@ def validate_lunaphore(horizon_export_filepath,
     # There could be multiple annotations. We'll handle them all using a dictionary. 
     
     # read in the horizon output
-    temp_input_df1 = pd.read_csv(horizon_export_filepath)
+    temp_input_df1 = pd.read_csv(horizon_export_filepath, low_memory=False)
 
     # remove unwanted column
     if 'Unnamed: 0' in list(temp_input_df1.columns):
