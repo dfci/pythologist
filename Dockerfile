@@ -24,7 +24,7 @@ RUN python3 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 # Upgrade pip and setuptools inside the virtual environment
-RUN pip install --upgrade pip setuptools
+RUN pip install --upgrade pip==26.0.1 setuptools==82.0.0
 
 # Install Python packages inside the virtual environment
 RUN pip install pandas==2.3.3 \
