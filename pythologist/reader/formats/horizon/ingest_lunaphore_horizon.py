@@ -16,7 +16,8 @@
 # Update 2026/04/06: Adjust microns to pixel conversion so that is it not hard coded. Also transform microns into pixels
 
 # TODO: process single cell data the same way the cdf is processed
-# TODO: are we happy with what intensity value is grabbed for each marker? Default b
+# TODO: are we happy with what intensity value is grabbed for each marker? Default is cell
+# TODO: frame dimensions
 
 
 import pandas as pd
@@ -714,10 +715,10 @@ def ingest_Lunaphore(df,
     df_merge['sample_id'] = uuid.uuid4().hex
     # I should calculate this using the minimum and maximum cell centroid locations for each ROI...
     # TODO: do we want this in pixels or microns? Is this implemented correctly?
-    # df_merge['frame_shape'] = df_merge['region_label'].apply(lambda x: tuple([1000,1000]))
-    width_px = int(np.ceil(df_merge['x'].max())) + 1 if 'x' in df_merge.columns else 1000
-    height_px = int(np.ceil(df_merge['y'].max())) + 1 if 'y' in df_merge.columns else 1000
-    df_merge['frame_shape'] = [(height_px, width_px)] * len(df_merge)
+    df_merge['frame_shape'] = df_merge['region_label'].apply(lambda x: tuple([1000,1000]))
+    # width_px = int(np.ceil(df_merge['x'].max())) + 1 if 'x' in df_merge.columns else 1000
+    # height_px = int(np.ceil(df_merge['y'].max())) + 1 if 'y' in df_merge.columns else 1000
+    # df_merge['frame_shape'] = [(height_px, width_px)] * len(df_merge)
     
     # convert to pythologist CellDataFrame
     cdf = CellDataFrame(df_merge)
