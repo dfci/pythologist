@@ -323,7 +323,7 @@ def validate_parameters(horizon_export_filepath, project_name, savefile_dir, sav
 # Exclusion annotation: 1.1.1
 def import_horizon_file(horizon_export_filepath):
     # read in the horizon output
-    temp_input_df1 = pd.read_csv(horizon_export_filepath)
+    temp_input_df1 = pd.read_csv(horizon_export_filepath, low_memory=False)
 
     # remove unwanted column
     if 'Unnamed: 0' in list(temp_input_df1.columns):
