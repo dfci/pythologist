@@ -30,7 +30,7 @@ RUN pip install --upgrade pip setuptools
 RUN pip install pandas==2.2.0 \
     && pip install numpy==1.26.3 \
     && pip install scipy \
-    && pip install h5py \
+    && pip install h5py==3.15.1 \
     && pip install scikit-learn \
     && pip install openpyxl \
     && pip install umap-learn \
