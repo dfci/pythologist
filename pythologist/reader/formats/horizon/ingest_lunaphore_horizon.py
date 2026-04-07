@@ -244,7 +244,7 @@ def run_lunaphore_ingestion(horizon_export_filepath,
         # savefile_dir
         # savefile_name
         savefile_path = os.path.join(savefile_dir, savefile_name + '.cdf.h5')
-        cdf.to_hdf(savefile_path,'data')
+        cdf.to_hdf(savefile_path,'data', mode='w')
 
     if run_qc:
         qc = cdf.qc()
