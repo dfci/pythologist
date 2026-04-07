@@ -28,21 +28,21 @@ RUN pip install --upgrade pip setuptools
 
 # Install Python packages inside the virtual environment
 RUN pip install pandas==2.3.3 \
-    && pip install numpy==1.26.4 \
-    && pip install scipy \
-    && pip install h5py==3.15.1 \
-    && pip install scikit-learn \
-    && pip install openpyxl \
-    && pip install umap-learn \
-    && pip install tables \
-    && pip install imageio \
-    && pip install xmltodict \
-    && pip install scikit-image \
-    && pip install imagecodecs \
-    && pip install jsonschema \
-    && pip install opencv-python-headless \
-    && pip install pythologist-test-images \
-    && pip install pyarrow
+                numpy==1.26.4 \
+                scipy \
+                h5py==3.15.1 \
+                scikit-learn \
+                openpyxl \
+                umap-learn \
+                tables \
+                imageio \
+                xmltodict \
+                scikit-image \
+                imagecodecs \
+                jsonschema \
+                opencv-python-headless \
+                pythologist-test-images \
+                pyarrow
 
 # Create a user with specific user_id and group_id
 ARG user=jupyter_user
