@@ -27,8 +27,8 @@ ENV PATH="/opt/venv/bin:$PATH"
 RUN pip install --upgrade pip setuptools
 
 # Install Python packages inside the virtual environment
-RUN pip install pandas==2.2.0 \
-    && pip install numpy==1.26.3 \
+RUN pip install pandas==2.3.3 \
+    && pip install numpy==1.26.4 \
     && pip install scipy \
     && pip install h5py==3.15.1 \
     && pip install scikit-learn \
