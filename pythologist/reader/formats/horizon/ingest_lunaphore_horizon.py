@@ -19,6 +19,7 @@
 # TODO: are we happy with what intensity value is grabbed for each marker? Default is cell
 # TODO: frame dimensions
 
+# test that I can modify on server
 
 import pandas as pd
 import numpy as np
@@ -244,6 +245,42 @@ def run_lunaphore_ingestion(horizon_export_filepath,
         # savefile_dir
         # savefile_name
         savefile_path = os.path.join(savefile_dir, savefile_name + '.cdf.h5')
+
+
+        # Troubleshooting (below):~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        print("Microns per pixel stored values and type:")
+        print(cdf.microns_per_pixel)
+        print(type(cdf.microns_per_pixel))
+        #
+        #
+        serialized_df = pd.DataFrame(cdf.serialize())
+        serialized_df.to_hdf(savefile_path, 'data', mode='w', format='table', complib='zlib', complevel=9)
+        print("See after pd.HDFStore:")
+        with pd.HDFStore(savefile_path, mode='r') as store:
+            print(store.keys())
+
+        import h5py
+        print("See after in h5py.File:")
+        with h5py.File(savefile_path, 'r') as f:
+            print(list(f.keys()))
+        #
+        #
+        serialized_df = pd.DataFrame(cdf.serialize())
+        test_path = savefile_path + ".test.h5"
+        
+        if os.path.exists(test_path):
+            os.remove(test_path)
+        
+        serialized_df.to_hdf(test_path, 'data', mode='w', format='table', complib='zlib', complevel=9)
+        print("See after pd.HDF.Store2:")
+        with pd.HDFStore(test_path, mode='r') as store:
+            print(store.keys())
+        print("See after in h5py2.File:")
+        import h5py
+        with h5py.File(test_path, 'r') as f:
+            print(list(f.keys()))
+        # Troubleshooting (above ):~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        
         cdf.to_hdf(savefile_path,'data', mode='w')
 
     if run_qc:
@@ -626,6 +663,12 @@ def ingest_Lunaphore(df,
     leftover_cols = list(df_vals.columns)
     df_vals['channel_values'] = df_vals.apply(lambda row: row.to_dict(), axis=1)
     df_vals = df_vals.drop(columns=leftover_cols)
+
+    # Troubleshooting print statments: TODO: remove
+    print("df_vals shape before calls merge:", df_vals.shape)
+    print("df_vals index names:", df_vals.index.names)
+    print("df_vals head:")
+    print(df_vals.head(2))
     
     # --------------------------------------------------------------------
     # Process Thresholds
@@ -657,6 +700,27 @@ def ingest_Lunaphore(df,
     print('calls columns subset')
     df_calls = df_calls.rename(columns = calls_remapping_dict)
     print('calls columns renamed')
+
+    # ---------------------------------------------------------
+    # Add same spatial conversion to calls as we did for values so we can merged
+    # Convert spatial measurements from microns to pixels
+    # so they match df_vals before setting index
+    if 'x' in df_calls.columns:
+        df_calls['x'] = df_calls['x'].apply(
+            lambda v: microns_to_pixels(v, microns_per_pixel) if pd.notna(v) else v
+        )
+
+    if 'y' in df_calls.columns:
+        df_calls['y'] = df_calls['y'].apply(
+            lambda v: microns_to_pixels(v, microns_per_pixel) if pd.notna(v) else v
+        )
+
+    if 'cell_area' in df_calls.columns:
+        df_calls['cell_area'] = df_calls['cell_area'].apply(
+            lambda v: microns2_to_pixels2(v, microns_per_pixel) if pd.notna(v) else v
+        )
+# ---------------------------------------------------------
+
     # drop regions column from df_calls because it's not hashable. Will merge it back in later. 
     df_calls = df_calls.drop(columns=['regions'])
     # Want to collapse columns into a dictionary column. 
@@ -692,12 +756,32 @@ def ingest_Lunaphore(df,
     
     # merge calls and phenotypes
     df_phenos_calls = df_calls.merge(df_phenos, how='inner', left_index=True, right_index=True)
-    
+
+    # Troubleshooting print statments: TODO: remove
+    print("df_calls shape before phenos merge:", df_calls.shape)
+    print("df_phenos shape:", df_phenos.shape)
+    print("df_phenos_calls shape:", df_phenos_calls.shape)
+    print("df_phenos_calls index names:", df_phenos_calls.index.names)
+    print("df_phenos_calls head:")
+    print(df_phenos_calls.head(2))
+
     # --------------------------------------------------------------------
     # Merge vals and calls back together on the indexes. 
     df_merge = df_vals.merge(df_phenos_calls, how='inner', left_index=True, right_index=True)
+
+    # troubleshooting print statments: TODO: remove
+    print("df_merge shape after vals/calls merge:", df_merge.shape)
+    print("df_merge head after vals/calls merge:")
+    print(df_merge.head(2))
+
     # merge the regions column back in using indexes. 
     df_merge = df_merge.merge(df_regions, how='inner', left_index=True, right_index=True)
+
+    # troubleshooting print statments: TODO: remove
+    print("df_regions shape:", df_regions.shape)
+    print("df_merge shape after regions merge:", df_merge.shape)
+    print("df_merge head after regions merge:")
+    print(df_merge.head(2))
     
     # Add some other pythologist columns
     # neighbors	frame_name	frame_id	sample_name	project_name	sample_id	project_id	frame_shape
