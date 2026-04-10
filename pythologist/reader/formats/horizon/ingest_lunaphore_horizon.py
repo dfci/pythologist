@@ -18,6 +18,9 @@
 # TODO: process single cell data the same way the cdf is processed
 # TODO: are we happy with what intensity value is grabbed for each marker? Default is cell
 # TODO: frame dimensions
+# TODO: change to merging on stable indexes
+# TODO: change microns to pixels conversion to be later in the process
+# TODO: remove test objects
 
 # test that I can modify on server
 
@@ -247,7 +250,7 @@ def run_lunaphore_ingestion(horizon_export_filepath,
         savefile_path = os.path.join(savefile_dir, savefile_name + '.cdf.h5')
 
 
-        # Troubleshooting (below):~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # Troubleshooting (below):~~~~~~~~~~~~~~~~~~~~~~~~~~~~ TODO: remove troubleshooting
         print("Microns per pixel stored values and type:")
         print(cdf.microns_per_pixel)
         print(type(cdf.microns_per_pixel))
@@ -642,6 +645,7 @@ def ingest_Lunaphore(df,
         df_vals['nucleus_y'] = df_vals['nucleus_y'].apply(lambda v: microns_to_pixels(v, microns_per_pixel) if pd.notna(v) else v)
     # ---------------------------------------------------------   
     
+    # TODO: is there a better way to do this indexing?
     # Use these columns for index
     if 'Leiden clusters' in df_vals.columns:
         index_columns = ['Annotation Group','Parent Annotation','cell_index','cell_area','x','y','region_label','Leiden clusters']
@@ -1224,8 +1228,17 @@ def export_comprehensive_single_cell(temp_input_cells, cdf, savefile_dir, savefi
     cols_to_round += [c for c in full_sc_data.columns if c.endswith('_um2')]
 
     cols_to_round = [c for c in cols_to_round if c in full_sc_data.columns]
+    cols_to_round = list(dict.fromkeys(cols_to_round))  # preserve order, remove duplicates
+
     if cols_to_round:
-        full_sc_data[cols_to_round] = full_sc_data[cols_to_round].round(4)
+        full_sc_data.loc[:, cols_to_round] = full_sc_data.loc[:, cols_to_round].round(4)
+
+    dupe_cols = full_sc_data.columns[full_sc_data.columns.duplicated()].tolist()
+    print("Duplicate column names in full_sc_data:", dupe_cols)
+
+    from collections import Counter
+    dupe_round = [k for k, v in Counter(cols_to_round).items() if v > 1]
+    print("Duplicate names in cols_to_round:", dupe_round)
 
     # ------------------------------------------------------------------
     # 8. Reorder columns so processed/CDF-like fields come first
