@@ -19,10 +19,8 @@
 # TODO: are we happy with what intensity value is grabbed for each marker? Default is cell
 # TODO: frame dimensions
 # TODO: change to merging on stable indexes
-# TODO: change microns to pixels conversion to be later in the process
-# TODO: remove test objects
-
-# test that I can modify on server
+# TODO: change microns to pixels conversion to be earlier in the process
+# TODO: remove troubleshooting print statements
 
 import pandas as pd
 import numpy as np
@@ -625,6 +623,7 @@ def ingest_Lunaphore(df,
 
     # ---------------------------------------------------------
     # Convert spatial measurements from microns to pixels
+    # TODO: move this later
     # x, y are in microns -> pixels
     # cell_area is in μm² -> pixels²
     if 'x' in df_vals.columns:
@@ -645,7 +644,7 @@ def ingest_Lunaphore(df,
         df_vals['nucleus_y'] = df_vals['nucleus_y'].apply(lambda v: microns_to_pixels(v, microns_per_pixel) if pd.notna(v) else v)
     # ---------------------------------------------------------   
     
-    # TODO: is there a better way to do this indexing?
+    # TODO: is there a better way to do this indexing? # TODO: ask Robert
     # Use these columns for index
     if 'Leiden clusters' in df_vals.columns:
         index_columns = ['Annotation Group','Parent Annotation','cell_index','cell_area','x','y','region_label','Leiden clusters']
@@ -709,6 +708,7 @@ def ingest_Lunaphore(df,
     # Add same spatial conversion to calls as we did for values so we can merged
     # Convert spatial measurements from microns to pixels
     # so they match df_vals before setting index
+    # TODO: do this and the df_vals later after we merge calls and vals back together, so we only have to do it once?
     if 'x' in df_calls.columns:
         df_calls['x'] = df_calls['x'].apply(
             lambda v: microns_to_pixels(v, microns_per_pixel) if pd.notna(v) else v
