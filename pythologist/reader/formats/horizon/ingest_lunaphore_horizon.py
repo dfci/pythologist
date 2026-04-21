@@ -35,14 +35,6 @@ pd.set_option('display.max_colwidth', None)
 
 
 # run all the ingestion methods
-# horizon_export_path: path to input data file from horizon export. Must be a string filepath. This contains areas and cells that need to be parsed. 
-# Note: in this version, if the cells_df_path and area_df_path are the same, the program assumes they're combined in the same file and will split them. 
-# project_name: name of the project. Example: 'Nick_Horizon_Testing_20241219'
-# savefile_dir: path to the directory you want to save the outputs in. 
-# savefile_name: name of the base name for the outputs. There will be a separate output cdf for each annotation. 
-# microns_per_pixel: should be 0.28 for the Lunaphore instrument as of 20241220
-# run_qc: set to True if you want to check the cdf qc
-# return_cdf: set to True if you want to return the cdf, otherwise just saves the file and doesn't return anything
 def run_lunaphore_ingestion(horizon_export_filepath,
                             project_name,
                             savefile_dir,
@@ -57,6 +49,26 @@ def run_lunaphore_ingestion(horizon_export_filepath,
                             show_meta = False,
                             rename_markers_dict = None,
                             choose_duplicate_threshold_to_keep = None):
+    
+    """
+    Main function to run the ingestion process for Lunaphore Horizon outputs.
+    Parameters:
+    - horizon_export_filepath (str): Path to the input data file from Horizon export. Must be a string filepath. This contains areas and cells that need to be parsed. 
+    Note: in this version, if the cells_df_path and area_df_path are the same, the program assumes they're combined in the same file and will split them.
+    - project_name (str): Name of the project. Example: 'Nick_Horizon_Testing_20241219'
+    - savefile_dir (str): Path to the directory you want to save the outputs in.
+    - savefile_name (str): Name of the base name for the outputs. There will be a separate output cdf for each annotation.
+    - overwrite_sample_name (str or None): If not None, will overwrite the sample_name in the cdf with this value. Otherwise, sample_name will be extracted from the Annotation Group column in the input data.
+    - default_phenotype (str): The default phenotype to assign to cells in the cdf. Default is 'CD3'.
+    - microns_per_pixel (float): The conversion factor from microns to pixels. Should be 0.28 for the Lunaphore instrument as of 20241220.
+    - run_qc (bool): Set to True if you want to check the cdf qc.
+    - save_cdf (bool): Set to True if you want to save the output cdf as a .cdf.h5 file in the specified savefile_dir with the specified savefile_name.
+    - save_full_single_cell (bool): Set to True if you want to save the full single cell data as a .csv file in the specified savefile_dir with the specified savefile_name + '_full_single_cell.csv'.
+    - return_cdf (bool): Set to True if you want to return the cdf, otherwise just saves the file and doesn't return anything.
+    - show_meta (bool): Set to True if you want to print the metadata extracted for each annotation.
+    - rename_markers_dict (dict or None): If not None, should be a dictionary where keys are old marker names and values are new marker names. This will be used to rename markers in the metadata before creating the cdf.
+    - choose_duplicate_threshold_to_keep (list of int or None): If not None, should be a list of integers specifying the indexes of the duplicated thresholds to keep in the case where duplicate thresholds are found for the same marker. The other duplicates will be dropped. This is used to resolve issues with duplicate threshold columns in the input data.
+    """
     
     # ---------------------------------------------------------
     # validate input parameters
@@ -151,7 +163,7 @@ def run_lunaphore_ingestion(horizon_export_filepath,
         #                    (temp_input_area['exclusion_annot_id']=='0')),'Area in μm²'] -= curr_area_to_subtract
 
     # Now we can drop all exclusion annotations. (exclusion annot id equals zero)
-    temp_input_area = temp_input_area.loc[temp_input_area['exclusion_annot_id']=='0']
+    temp_input_area = temp_input_area.loc[temp_input_area['exclusion_annot_id']=='0'].copy()
     
     if show_meta:
         print('updated area: ')
@@ -194,7 +206,7 @@ def run_lunaphore_ingestion(horizon_export_filepath,
         print('- - - - - - - - - - - - - - - - - - - - - - - -')
         print('processing ' + str(curr_annot) + ' - - - - - - -')
         # remove columns with only nans... again
-        curr_cells = curr_cells.dropna(axis=1, how='all')
+        curr_cells = curr_cells.dropna(axis=1, how='all').copy()
         # check
         #display(curr_cells.head(5))
         
@@ -376,15 +388,15 @@ def import_horizon_file(horizon_export_filepath):
     temp_input_df1.loc[~temp_input_df1['Annotation Group'].str.contains('Nuclei Segmentation'), 'annot_name'] = temp_input_df1['Annotation Group'].str.split('/').str[-1]
     # Split the cells and the areas dfs apart. 
     # cells df has Nuclei Segmentation in the Annotation Group "path", extract those rows
-    temp_input_cells = temp_input_df1.loc[temp_input_df1['Annotation Group'].str.contains('Nuclei Segmentation')]
+    temp_input_cells = temp_input_df1.loc[temp_input_df1['Annotation Group'].str.contains('Nuclei Segmentation')].copy()
     # area df does not have Nuclei Segmentation in the Annotation Group "path", extract those rows
-    temp_input_area = temp_input_df1.loc[~temp_input_df1['Annotation Group'].str.contains('Nuclei Segmentation')]
+    temp_input_area = temp_input_df1.loc[~temp_input_df1['Annotation Group'].str.contains('Nuclei Segmentation')].copy()
     
     # remove Exclusions from cells dataframe if there are any
     if 'Class group' in list(temp_input_cells.columns):
         print('Removing exclusions...')
         print('Size before removing exclusions: ' + str(temp_input_cells.shape))
-        temp_input_cells = temp_input_cells.loc[temp_input_cells['Class group']!='Exclusions']
+        temp_input_cells = temp_input_cells.loc[temp_input_cells['Class group']!='Exclusions'].copy()
         print('Size after removing exclusions: ' + str(temp_input_cells.shape))
 
     # Label parent annotations for CELLS (Main and ROI). Should be in Class group column. 
@@ -410,6 +422,9 @@ def import_horizon_file(horizon_export_filepath):
 # function to integrate region areas into the cells dataframe. 
 # regions will just be called ANY (assuming there's only one)
 def add_region_areas(cells_df, area_df, microns_per_pixel):
+    # Make clean copy's
+    cells_df = cells_df.copy()
+    area_df = area_df.copy()
     # Set region label to ANY
     area_df['region_label'] = 'ANY'
     cells_df['region_label'] = 'ANY'
@@ -819,6 +834,9 @@ def ingest_Lunaphore(df,
 # Cell Area: Mean, Median, Min, Max, Standard Deviation
 # Cell density per phenotype in this ROI (including all cells)
 def extract_roi_measures(cdf, meta, microns_per_pixel=0.28):
+
+    # Make a clean copy:
+    cdf = cdf.copy()
 
     # function to calculate gini index
     def gini_coefficient(x):
