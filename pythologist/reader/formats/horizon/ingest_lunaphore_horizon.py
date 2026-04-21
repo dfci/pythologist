@@ -705,6 +705,9 @@ def ingest_Lunaphore(df,
     # drop Nucleus: Mean Intensity combination
     meta = meta.loc[~((meta['Compartment_Type']=='Nucleus') & (meta['Measurement_Type']=='Mean Intensity'))]
 
+    # Make a clean copy:
+    meta = meta.copy()
+
     # --------------------------------------------------------------------
     # Convert spatial measurements from microns to pixels ONCE
     # using the original Horizon column names identified in metadata
@@ -1019,6 +1022,9 @@ def extract_roi_measures(cdf, meta, microns_per_pixel=0.28):
     phenotype_df = pd.json_normalize(cdf['phenotype_calls'])
     if 'OTHER' in phenotype_df.columns:
         phenotype_df_pre = phenotype_df.drop('OTHER', axis=1)
+    else: # TODO: Added this logic, is this the desired behavior?
+        print("Phenotype other not found in phenotype calls. Check that the default phenotype is correctly specified and that the OTHER phenotype was generated correctly. Proceeding with all phenotypes as they are without separating out OTHER.")
+        phenotype_df_pre = phenotype_df.copy()
 
     # Scored Call Measurements
     # Ensure they're dicts and not strings
