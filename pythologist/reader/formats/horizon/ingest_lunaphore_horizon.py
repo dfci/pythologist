@@ -440,11 +440,28 @@ def add_region_areas(cells_df, area_df, microns_per_pixel):
     return cells_df
 
 
-# function to extract metadata
-# This function labels columns in the dataset to indicate which columns should be used for what later on. 
-# It also helps set up to rename the columns later. 
-
 def extract_column_metadata(cells_df):
+    """
+    This function extracts metadata from the column names in the input cells dataframe, and creates a new dataframe with columns for the original column names, the measurement type, the compartment type, the marker, and the channel.
+    The measurement type, compartment type, marker, and channel are extracted based on the original column names using string matching and splitting. 
+    The output dataframe has the following columns:
+    - orig_cols: the original column names from the input cells dataframe
+    - Measurement_Type: the type of measurement (e.g. 'Mean Intensity', 'Threshold', 'Area in μm²', etc.) extracted from the original column names
+    - Compartment_Type: the type of compartment (e.g. 'Cell', 'Nucleus', 'Cytoplasm', etc.) extracted from the original column names
+    - Marker: the marker name (e.g. 'CD3', 'CD8', etc.) extracted from the original column names
+    - Channel: the channel name (e.g. 'DAPI', 'FITC', etc.) extracted from the original column names
+    This function labels columns in the dataset to indicate which columns should be used for what later on. 
+    It also helps set up to rename the columns later. 
+    Parameters:
+    - cells_df (pd.DataFrame): the input cells dataframe containing the original columns from the Horizon export. Must contain the columns that are expected to be in the Horizon output, such as 'Annotation Group', 'X Position in μm', 'Y Position in μm', 'Area in μm²', 'Mean Intensity', 'Threshold', etc. The function will attempt to extract metadata from these columns based on their names. 
+        Returns:
+    - meta_df (pd.DataFrame): a dataframe containing the original column names and the extracted metadata for each column. The columns are:
+        - orig_cols: the original column names from the input cells dataframe
+        - Measurement_Type: the type of measurement extracted from the original column names
+        - Compartment_Type: the type of compartment extracted from the original column names
+        - Marker: the marker name extracted from the original column names
+        - Channel: the channel name extracted from the original column names
+    """
     import numpy as np
     
     # extract columns
@@ -828,12 +845,52 @@ def ingest_Lunaphore(df,
     
     return cdf
 
-# Input: pythologist cdf that has been ingested from Lunaphore
-# Calculate QC measures per ROI. 
-# Fluorescence per marker: Mean, Median, Min, Max, Standard Deviation
-# Cell Area: Mean, Median, Min, Max, Standard Deviation
+
 # Cell density per phenotype in this ROI (including all cells)
 def extract_roi_measures(cdf, meta, microns_per_pixel=0.28):
+    """
+    This function takes in a pythologist CellDataFrame that has been ingested from a Lunaphore Horizon export, and extracts various measures at the ROI level.
+    This function calculates QC measures per ROI.
+    The function calculates the following measures:
+    - Cell Area: Mean, Median, Min, Max, Standard Deviation, Skew
+    - Fluorescence per marker: Mean, Median, Min, Max, Standard Deviation, Skew
+    - Cell density per phenotype in this ROI (including all cells)
+    The function returns a dictionary containing these measures, which can be used for quality control or further analysis. 
+    Parameters:
+    - cdf (CellDataFrame): a pythologist CellDataFrame that has been ingested from a Lunaphore Horizon export. Must contain the necessary columns for cell area, fluorescence measurements, and phenotype calls as expected from the ingest_Lunaphore function.
+    - meta (pd.DataFrame): the metadata dataframe containing information about the original columns and their mappings. This is used to identify which columns contain the relevant measurements for fluorescence and phenotypes.
+    - microns_per_pixel (float): the conversion factor from microns to pixels, used to convert cell area measurements from pixels back to microns for the output measures. Default is 0.28 microns/pixel, which is a common resolution for imaging data. 
+    Returns:
+    - roi_measures (dict): a dictionary containing the extracted measures for cell area, fluorescence, and cell density per phenotype. The structure of the dictionary is as follows:
+    {
+    'cell_area': {
+        'mean': value,
+        'median': value,
+        'min': value,
+        'max': value,
+        'std': value,
+        'skew': value,
+        'kurtosis': value,
+        'gini': value
+    },
+    'fluorescence': {
+        'marker_name': {
+            'mean': value,
+            'median': value,
+            'min': value,
+            'max': value,
+            'std': value,
+            'skew': value,
+            'kurtosis': value,
+            'gini': value
+        },
+        ...
+    },
+    'cell_density': {
+        'phenotype_name': value,
+        ...    }
+    }
+    """
 
     # Make a clean copy:
     cdf = cdf.copy()
