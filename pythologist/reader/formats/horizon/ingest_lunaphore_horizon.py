@@ -595,6 +595,9 @@ def ingest_Lunaphore(df,
                      overwrite_sample_name = None):
     import numpy as np
     import uuid
+
+    # Make a clean copy so we aren't playing with slices of the original dataframe.
+    df = df.copy()
     
     # drop Area Threshold and Position Threshold
     meta = meta.loc[~meta['Measurement_Type'].isin(['Area Threshold','Position Threshold'])]
@@ -604,6 +607,31 @@ def ingest_Lunaphore(df,
     meta = meta.loc[~meta['Measurement_Type'].isin(['nucleus_x','nucleus_y'])]
     # drop Nucleus: Mean Intensity combination
     meta = meta.loc[~((meta['Compartment_Type']=='Nucleus') & (meta['Measurement_Type']=='Mean Intensity'))]
+
+    # --------------------------------------------------------------------
+    # Convert spatial measurements from microns to pixels ONCE
+    # using the original Horizon column names identified in metadata
+    # x, y are in microns -> pixels
+    # cell_area is in μm² -> pixels²
+    # TODO: do we want to do nuclear area too?
+    spatial_meta = meta.loc[meta['Measurement_Type'].isin(['x', 'y', 'cell_area', 'nucleus_x', 'nucleus_y'])]
+
+    for _, row in spatial_meta.iterrows():
+        orig_col = row['orig_cols']
+        measurement_type = row['Measurement_Type']
+
+        if orig_col not in df.columns:
+            continue
+
+        if measurement_type in ['x', 'y', 'nucleus_x', 'nucleus_y']:
+            df[orig_col] = df[orig_col].apply(
+                lambda v: microns_to_pixels(v, microns_per_pixel) if pd.notna(v) else v
+            )
+
+        elif measurement_type == 'cell_area':
+            df[orig_col] = df[orig_col].apply(
+                lambda v: microns2_to_pixels2(v, microns_per_pixel) if pd.notna(v) else v
+            )
     
     # --------------------------------------------------------------------
     # Process Values
@@ -620,28 +648,7 @@ def ingest_Lunaphore(df,
     df_vals = df_vals.rename(columns = vals_remapping_dict)
     print('values columns renamed')
     print(list(df_vals.columns))
-
-    # ---------------------------------------------------------
-    # Convert spatial measurements from microns to pixels
-    # TODO: move this later
-    # x, y are in microns -> pixels
-    # cell_area is in μm² -> pixels²
-    if 'x' in df_vals.columns:
-        df_vals['x'] = df_vals['x'].apply(lambda v: microns_to_pixels(v, microns_per_pixel) if pd.notna(v) else v)
-
-    if 'y' in df_vals.columns:
-        df_vals['y'] = df_vals['y'].apply(lambda v: microns_to_pixels(v, microns_per_pixel) if pd.notna(v) else v)
-
-    if 'cell_area' in df_vals.columns:
-        df_vals['cell_area'] = df_vals['cell_area'].apply(lambda v: microns2_to_pixels2(v, microns_per_pixel) if pd.notna(v) else v)
     
-    # TODO: makes sure this is applied correctly for single cell data. 
-    # TODO: do we want to do nuclear area too?
-    if 'nucleus_x' in df_vals.columns:
-        df_vals['nucleus_x'] = df_vals['nucleus_x'].apply(lambda v: microns_to_pixels(v, microns_per_pixel) if pd.notna(v) else v)
-
-    if 'nucleus_y' in df_vals.columns:
-        df_vals['nucleus_y'] = df_vals['nucleus_y'].apply(lambda v: microns_to_pixels(v, microns_per_pixel) if pd.notna(v) else v)
     # ---------------------------------------------------------   
     
     # TODO: is there a better way to do this indexing? # TODO: ask Robert
@@ -705,25 +712,6 @@ def ingest_Lunaphore(df,
     print('calls columns renamed')
 
     # ---------------------------------------------------------
-    # Add same spatial conversion to calls as we did for values so we can merged
-    # Convert spatial measurements from microns to pixels
-    # so they match df_vals before setting index
-    # TODO: do this and the df_vals later after we merge calls and vals back together, so we only have to do it once?
-    if 'x' in df_calls.columns:
-        df_calls['x'] = df_calls['x'].apply(
-            lambda v: microns_to_pixels(v, microns_per_pixel) if pd.notna(v) else v
-        )
-
-    if 'y' in df_calls.columns:
-        df_calls['y'] = df_calls['y'].apply(
-            lambda v: microns_to_pixels(v, microns_per_pixel) if pd.notna(v) else v
-        )
-
-    if 'cell_area' in df_calls.columns:
-        df_calls['cell_area'] = df_calls['cell_area'].apply(
-            lambda v: microns2_to_pixels2(v, microns_per_pixel) if pd.notna(v) else v
-        )
-# ---------------------------------------------------------
 
     # drop regions column from df_calls because it's not hashable. Will merge it back in later. 
     df_calls = df_calls.drop(columns=['regions'])
