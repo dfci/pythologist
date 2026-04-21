@@ -340,8 +340,23 @@ def run_lunaphore_ingestion(horizon_export_filepath,
         return cdf
 
 
-# function to validate input parameters before proceeding
 def validate_parameters(horizon_export_filepath, project_name, savefile_dir, savefile_name, microns_per_pixel, run_qc, return_cdf, save_full_single_cell, overwrite_sample_name, default_phenotype):
+    """
+    This function validates the input parameters for the main ingestion function. It checks that the parameters are of the correct type and that the specified file paths exist. If any parameter is invalid, it raises an appropriate error with a descriptive message.
+    Parameters:
+    - horizon_export_filepath (str): Path to the input data file from Horizon export. Must be a string filepath. This contains areas and cells that need to be parsed.
+    - project_name (str): Name of the project. Example: 'Nick_Horizon_Testing_20241219'
+    - savefile_dir (str): Path to the directory you want to save the outputs in.
+    - savefile_name (str): Name of the base name for the outputs. There will be a separate output cdf for each annotation.
+    - overwrite_sample_name (str or None): If not None, will overwrite the sample_name in the cdf with this value. Otherwise, sample_name will be extracted from the Annotation Group column in the input data.
+    - default_phenotype (str): The default phenotype to assign to cells in the cdf. Default is 'CD3'.
+    - microns_per_pixel (float): The conversion factor from microns to pixels. Should be 0.28 for the Lunaphore instrument as of 20241220.
+    - run_qc (bool): Set to True if you want to check the cdf qc.
+    - return_cdf (bool): Set to True if you want to return the cdf, otherwise just saves the file and doesn't return anything.
+    - save_full_single_cell (bool): Set to True if you want to save the full single cell data as a .csv file in the specified savefile_dir with the specified savefile_name + '_full_single_cell.csv'.
+    Returns:
+    - None: this function does not return any value, but it raises errors if any of the input parameters are invalid.
+    """
     # Type checking
     if not isinstance(horizon_export_filepath, str):
         raise TypeError("horizon_export_filepath must be a string")
@@ -368,13 +383,23 @@ def validate_parameters(horizon_export_filepath, project_name, savefile_dir, sav
     if not os.path.isfile(horizon_export_filepath):
         raise ValueError(f"The path '{horizon_export_filepath}' is not a file")
 
-# function to read in and process a horizon export file
-# Will remove excluded cells, and separate areas and cells df. 
-# Will annotate the annotations according to the nested structure we require. 
-# Main annotation: 1.0.0
-# ROI annotation: 1.1.0
-# Exclusion annotation: 1.1.1
+
 def import_horizon_file(horizon_export_filepath):
+    """
+    This function reads in a Horizon export file, processes the data to separate cell and area annotations, and labels the annotations according to a nested structure. 
+    It removes any excluded cells from the cell dataframe and separates the area and cell dataframes based on the presence of 'Nuclei Segmentation' in the 'Annotation Group' column. 
+    The function also extracts annotation names and types for both cells and areas, and returns two dataframes: one for cells and one for areas.
+    Will annotate the annotations according to the nested structure we require. 
+    Main annotation: 1.0.0
+    ROI annotation: 1.1.0
+    Exclusion annotation: 1.1.1
+    Parameters:
+    - horizon_export_filepath (str): Path to the input data file from Horizon export. Must be a string filepath. This contains areas and cells that need to be parsed. The function will read this file, process the data, and return two dataframes: one for cells and one for areas.
+    Returns:
+    - temp_input_cells (pd.DataFrame): a dataframe containing the cell annotations from the Horizon export file, with excluded cells removed and annotations labeled according to the nested structure. This dataframe will have columns for annotation names, types, and other relevant information extracted from the original data.
+    - temp_input_area (pd.DataFrame): a dataframe containing the area annotations from the Horizon export file, with annotations labeled according to the nested structure. This dataframe will have columns for annotation names, types, and other relevant information extracted from the original data.
+
+    """
     # read in the horizon output
     temp_input_df1 = pd.read_csv(horizon_export_filepath, low_memory=False)
 
@@ -419,9 +444,17 @@ def import_horizon_file(horizon_export_filepath):
 
     return temp_input_cells, temp_input_area
 
-# function to integrate region areas into the cells dataframe. 
-# regions will just be called ANY (assuming there's only one)
+
 def add_region_areas(cells_df, area_df, microns_per_pixel):
+    """
+    This function integrates region areas into the cells dataframe. It assumes that there is only one region, which will be labeled as 'ANY'. The function converts the area measurements from microns squared to pixels squared using the provided microns_per_pixel conversion factor. It then creates a dictionary of region areas and adds this information to the cells dataframe in a new column called 'regions'.
+    Parameters:
+    - cells_df (pd.DataFrame): the input cells dataframe containing cell annotations and measurements.
+    - area_df (pd.DataFrame): the input area dataframe containing area annotations and measurements, including the area in microns squared.
+    - microns_per_pixel (float): the conversion factor from microns to pixels, used to convert area measurements from microns squared to pixels squared.
+    Returns:
+    - cells_df (pd.DataFrame): the updated cells dataframe with a new column 'regions' that contains a dictionary of region areas in pixels squared, labeled as 'ANY'.
+    """
     # Make clean copy's
     cells_df = cells_df.copy()
     area_df = area_df.copy()
@@ -607,26 +640,56 @@ def extract_column_metadata(cells_df):
     return df
 
 
-# function to check Marker names
 def check_markers(meta):
+    """
+    This function checks the unique Marker names in the metadata dataframe and displays them. This is useful for identifying any inconsistencies or unexpected marker names before proceeding with further processing.
+    Parameters:
+    - meta (pd.DataFrame): the metadata dataframe containing the extracted metadata for each column, including the 'Marker' column which contains the marker names extracted from the original column names. This dataframe is typically the output of the extract_column_metadata function, and should have a 'Marker' column with the marker names for each column in the original cells dataframe.
+    Returns:
+    - None: this function does not return any value, but it displays the unique Marker names in the metadata dataframe.
+    """
     display(list(meta['Marker'].dropna().unique()))
 
 
-# function to rename Marker names
 def rename_marker(meta, old_marker_name, new_marker_name):
+    """
+    This function renames a specified marker name in the 'Marker' column of the metadata dataframe, and also updates the 'Label_Mapping' column accordingly. This is useful for standardizing marker names or correcting any inconsistencies before further processing.
+    Parameters:
+    - meta (pd.DataFrame): the metadata dataframe containing the extracted metadata for each column,
+      including the 'Marker' column which contains the marker names, and the 'Label_Mapping' column which contains the names that will be used for renaming the columns in the original cells dataframe. This dataframe is typically the output of the extract_column_metadata function.
+    - old_marker_name (str): the marker name to be renamed. This should match one of the existing marker names in the 'Marker' column of the metadata dataframe.
+    - new_marker_name (str): the new marker name that will replace the old marker name in the 'Marker' column and the 'Label_Mapping' column of the metadata dataframe.
+    Returns:
+    - meta (pd.DataFrame): the updated metadata dataframe with the specified marker name renamed in the 'Marker' column and the 'Label_Mapping' column. The original column names and other metadata will remain unchanged, except for the updated marker name.
+    """
     meta['Marker'] = meta['Marker'].replace(old_marker_name, new_marker_name)
     # also update Label_Mapping column
     meta['Label_Mapping'] = meta['Label_Mapping'].replace(old_marker_name, new_marker_name)
     return meta
 
 
-# function to transform Lunaphore Horizon output data into a pythologist CellDataFrame
 def ingest_Lunaphore(df, 
                      meta, 
                      proj_name, 
                      default_phenotype='CD3', 
                      microns_per_pixel=0.28,
                      overwrite_sample_name = None):
+    """
+    This function takes in a dataframe of cell data from the Lunaphore Horizon export, along with metadata about the columns, and transforms it into a pythologist CellDataFrame. 
+    The function performs several steps to clean and reformat the data, including converting spatial measurements from microns to pixels, renaming columns based on the metadata, and collapsing value columns into a dictionary column for channel values. 
+    The function also handles threshold measurements separately and checks for any markers that have thresholds in multiple compartments, which may cause unexpected behavior. The output is a pythologist CellDataFrame that can be used for downstream analysis.
+    Parameters:
+    - df (pd.DataFrame): the input dataframe containing the cell data from the Lunaphore Horizon export. This dataframe should have columns that correspond to the original column names from the Horizon export, and the metadata dataframe should contain the necessary information to extract measurement types, compartment types, marker names,
+    and channel names from these original column names.
+    - meta (pd.DataFrame): the metadata dataframe containing the extracted metadata for each column, including the original column names, measurement types, compartment types, marker names, and channel names. This dataframe is typically the output of the extract_column_metadata function, and should have columns such as 'orig_cols', 'Measurement_Type', 'Compartment_Type', 'Marker', 'Channel', and 'Label_Mapping'.
+    - proj_name (str): the name of the project to be used in the pythologist CellDataFrame. This will be assigned to the 'project_id' column in the output CellDataFrame.
+    - default_phenotype (str): the default phenotype to be assigned to cells in the output CellDataFrame. This will be used to fill in any missing phenotype information for cells in the input dataframe. Default is 'CD3'.
+    - microns_per_pixel (float): the conversion factor to convert spatial measurements from microns to pixels. This will be used to convert x and y positions, as well as cell area, from microns to pixels. Default is 0.28.
+    - overwrite_sample_name (str or None): if provided, this sample name will overwrite any existing sample name information in the input dataframe and will be assigned to the 'sample_name' column in the output CellDataFrame. If None, the sample name will be extracted from the 'Annotation Group' column in the input dataframe. Default is None.
+    Returns:
+    - cdf (pythologist CellDataFrame): the output pythologist CellDataFrame containing the transformed cell data from the Lunaphore Horizon export, with spatial measurements converted to pixels, columns renamed based on the metadata, and channel values collapsed into a dictionary column. The CellDataFrame will have the 'project_id' column set to the provided project name, and the 'sample_name
+    ' column set based on the input dataframe or overwritten if specified. The CellDataFrame will be ready for downstream analysis using pythologist.
+    """
     import numpy as np
     import uuid
 
@@ -897,6 +960,12 @@ def extract_roi_measures(cdf, meta, microns_per_pixel=0.28):
 
     # function to calculate gini index
     def gini_coefficient(x):
+        """Calculate the Gini coefficient of a numpy array.
+        The Gini coefficient is a measure of inequality in a distribution, where 0 represents perfect equality and 1 represents perfect inequality.
+        Parameters:
+        - x (numpy array): the input array for which to calculate the Gini coefficient.
+        Returns:
+        - gini (float): the Gini coefficient of the input array."""
         # Remove NaN values
         x = x[~np.isnan(x)]
         # Handle edge cases
@@ -1054,6 +1123,16 @@ def extract_roi_measures(cdf, meta, microns_per_pixel=0.28):
 
 
 def get_thresholds_from_meta(meta):
+    """
+    This function extracts threshold values from the metadata dataframe and returns them in a structured format. It filters the metadata to include only rows where the Measurement_Type is 'Threshold', and then selects relevant columns to create a new dataframe with Marker
+    as columns and the corresponding threshold values. The resulting dataframe is transposed to have Markers as column names and a 'data_type' column indicating the type of data (e.g., 'Threshold').
+    Parameters:
+    - meta (pd.DataFrame): the metadata dataframe containing information about the original columns and their mappings. This dataframe is typically the output of the extract_column_metadata function, and should have columns such as 'orig_cols', 'Measurement_Type', 'Compartment_Type', 'Marker', 'Channel',
+        and 'Label_Mapping'. The function will filter this dataframe to extract rows where 'Measurement_Type' is 'Threshold' and will use the 'Marker', 'Compartment_Type', 'Channel', and 'Threshold' columns to create the output dataframe.
+    Returns:
+    - thresholds_df (pd.DataFrame): a dataframe containing the threshold values for each marker, structured with Markers as column names and a 'data_type' column indicating the type of data (e.g., 'Threshold'). The dataframe is created by filtering the input metadata dataframe for rows where '
+    Measurement_Type' is 'Threshold', selecting relevant columns, and transposing the result to have Markers as column names.
+    """
     thresholds_df_pre = meta.loc[meta['Measurement_Type']=='Threshold']
     # subset to columns of interest, set Marker as index, Transpose to get Markers as col names
     thresholds_df = thresholds_df_pre[['Compartment_Type','Marker','Channel','Threshold']].set_index('Marker').T.reset_index().rename(columns={'index': 'data_type'})
@@ -1070,6 +1149,17 @@ def _create_consistent_column_name(row):
     """
     Creates a new, consistent column name from a metadata row
     generated by extract_column_metadata.
+    This function takes in a row of metadata for a column, which includes the original column name, the measurement type (e.g., 'Mean Intensity', 'Threshold', 'x', 'y', 'cell_area'), the compartment type (e.g., 'Nucleus', 'Cytoplasm', 'Cell'), and the marker name (e.g., 'CD3', 'CD8').
+    It then applies a set of rules to generate a new column name that is more standardized and consistent with the conventions used in the CellDataFrame. For example, it may rename 'x' and 'y' measurements to include the compartment (e.g., 'nucleus_x', 'cytoplasm_y'), and it may combine the compartment, measurement type, and marker name into a single column name (e.g., 'Cell_MeanIntensity_CD3').
+    The function also includes some special handling to ensure that certain columns are kept as is, and that the exported single-cell column names match what the export_comprehensive_single_cell() function expects. If a column does not match any of the specified rules, it will return the original column name.
+    Parameters:
+    - row (pd.Series): a row of metadata for a column, which should include the following fields: 'orig_cols' (the original column name), 'Measurement_Type' (the type of measurement, e.g., 'Mean Intensity', 'Threshold', 'x', 'y', 'cell_area'), 'Compartment_Type' (the type of compartment, e.g., 'Nucleus', 'Cytoplasm', 'Cell'), and 'Marker' (the name of the marker, e.g., 'CD3', 'CD8').
+     Returns:
+    - new_col_name (str): a new, consistent column name generated based on the input metadata row, following the specified rules for renaming. 
+    If the original column name is in the list of identity columns, it will be returned as is. If the measurement type is 'x' or 'y', it will be renamed to include the compartment (e.g., 'nucleus_x', 'cytoplasm_y'). 
+    If the measurement type is 'cell_area', it will be renamed to include the compartment (e.g., 'nucleus_area', 'cytoplasm_area'). For other measurement types, the new column name will be a combination of the compartment, standardized measurement name, 
+    and marker name (e.g., 'Cell_MeanIntensity_CD3'). If no specific rules apply, the original column name will be returned.
+
     """
     orig_col = row['orig_cols']
     
