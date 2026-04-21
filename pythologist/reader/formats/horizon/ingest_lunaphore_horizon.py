@@ -249,6 +249,7 @@ def run_lunaphore_ingestion(horizon_export_filepath,
 
 
         # Troubleshooting (below):~~~~~~~~~~~~~~~~~~~~~~~~~~~~ TODO: remove troubleshooting
+        """
         print("Microns per pixel stored values and type:")
         print(cdf.microns_per_pixel)
         print(type(cdf.microns_per_pixel))
@@ -280,6 +281,7 @@ def run_lunaphore_ingestion(horizon_export_filepath,
         import h5py
         with h5py.File(test_path, 'r') as f:
             print(list(f.keys()))
+        """
         # Troubleshooting (above ):~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         
         cdf.to_hdf(savefile_path,'data', mode='w')
