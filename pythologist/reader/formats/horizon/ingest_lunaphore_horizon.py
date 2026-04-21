@@ -823,12 +823,12 @@ def ingest_Lunaphore(df,
     # pull out phenotype call
     if default_phenotype in list(df_calls.columns):
         # If the default phenotype is present, use that
-        df_phenos = df_calls[[default_phenotype]]
+        df_phenos = df_calls[[default_phenotype]].copy()
     else:
         # if not, just use first scored call column
         # update default_phenotype to the first column
         default_phenotype = list(df_calls.columns)[0]
-        df_phenos = df_calls[[default_phenotype]]
+        df_phenos = df_calls[[default_phenotype]].copy()
     # Drop that phenotype from the scored calls
     df_calls = df_calls.drop(columns=[default_phenotype])
     # Generate OTHER phenotype as the opposite boolean of the default phenotype
@@ -1023,7 +1023,7 @@ def extract_roi_measures(cdf, meta, microns_per_pixel=0.28):
     if 'OTHER' in phenotype_df.columns:
         phenotype_df_pre = phenotype_df.drop('OTHER', axis=1)
     else: # TODO: Added this logic, is this the desired behavior?
-        print("Phenotype other not found in phenotype calls. Check that the default phenotype is correctly specified and that the OTHER phenotype was generated correctly. Proceeding with all phenotypes as they are without separating out OTHER.")
+        warnings.warn("Phenotype other not found in phenotype calls. Check that the default phenotype is correctly specified and that the OTHER phenotype was generated correctly. Proceeding with all phenotypes as they are without separating out OTHER.")
         phenotype_df_pre = phenotype_df.copy()
 
     # Scored Call Measurements
