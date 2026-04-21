@@ -675,10 +675,12 @@ def ingest_Lunaphore(df,
     df_vals = df_vals.drop(columns=leftover_cols)
 
     # Troubleshooting print statments: TODO: remove
+    """
     print("df_vals shape before calls merge:", df_vals.shape)
     print("df_vals index names:", df_vals.index.names)
     print("df_vals head:")
     print(df_vals.head(2))
+    """
     
     # --------------------------------------------------------------------
     # Process Thresholds
@@ -750,30 +752,36 @@ def ingest_Lunaphore(df,
     df_phenos_calls = df_calls.merge(df_phenos, how='inner', left_index=True, right_index=True)
 
     # Troubleshooting print statments: TODO: remove
+    """
     print("df_calls shape before phenos merge:", df_calls.shape)
     print("df_phenos shape:", df_phenos.shape)
     print("df_phenos_calls shape:", df_phenos_calls.shape)
     print("df_phenos_calls index names:", df_phenos_calls.index.names)
     print("df_phenos_calls head:")
     print(df_phenos_calls.head(2))
+    """
 
     # --------------------------------------------------------------------
     # Merge vals and calls back together on the indexes. 
     df_merge = df_vals.merge(df_phenos_calls, how='inner', left_index=True, right_index=True)
 
     # troubleshooting print statments: TODO: remove
+    """
     print("df_merge shape after vals/calls merge:", df_merge.shape)
     print("df_merge head after vals/calls merge:")
     print(df_merge.head(2))
+    """
 
     # merge the regions column back in using indexes. 
     df_merge = df_merge.merge(df_regions, how='inner', left_index=True, right_index=True)
 
     # troubleshooting print statments: TODO: remove
+    """
     print("df_regions shape:", df_regions.shape)
     print("df_merge shape after regions merge:", df_merge.shape)
     print("df_merge head after regions merge:")
     print(df_merge.head(2))
+    """
     
     # Add some other pythologist columns
     # neighbors	frame_name	frame_id	sample_name	project_name	sample_id	project_id	frame_shape
