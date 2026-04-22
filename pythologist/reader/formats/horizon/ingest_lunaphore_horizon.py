@@ -1333,19 +1333,60 @@ def export_comprehensive_single_cell(temp_input_cells, cdf, savefile_dir, savefi
 
     # ---------------------------------------------------------
     # Check for duplicate column names created by renaming
+    # If duplicates are identical, keep the first and drop the rest.
+    # If duplicates differ, raise an error and print a preview.
     # ---------------------------------------------------------
-    from collections import Counter
+    duplicate_cols = full_sc_data.columns[full_sc_data.columns.duplicated()].unique().tolist()
 
-    duplicate_cols = [col for col, count in Counter(full_sc_data.columns).items() if count > 1]
     if duplicate_cols:
-        warnings.warn(
-            f"Duplicate column names found after renaming in full single-cell export: {duplicate_cols}\n"
-            f"Keeping the first occurrence of each duplicate and dropping the rest."
-        )
-        full_sc_data = full_sc_data.loc[:, ~full_sc_data.columns.duplicated()].copy()
+        print("Duplicate column names found after renaming:")
+        print(duplicate_cols)
 
-    # ------------------------------------------------------------------
-    # 5. Add explicit pixel and micron versions of CDF spatial columns
+        for dup_col in duplicate_cols:
+            dup_df = full_sc_data.loc[:, full_sc_data.columns == dup_col]
+
+            # Find original columns that mapped to this duplicate name
+            orig_problem_cols = [
+                row['orig_cols']
+                for _, row in sc_meta.iterrows()
+                if rename_dict.get(row['orig_cols']) == dup_col
+            ]
+
+            # Compare every duplicate column to the first one
+            first_col = dup_df.iloc[:, 0]
+            identical_flags = dup_df.apply(lambda col: col.equals(first_col), axis=0)
+
+            if identical_flags.all():
+                warnings.warn(
+                    f"Duplicate column '{dup_col}' found after renaming, but all copies are identical. "
+                    f"Keeping the first occurrence and dropping the rest."
+                )
+            else:
+                print(f"\nNon-identical duplicate column detected: '{dup_col}'")
+                print("Original columns mapping to this renamed column:")
+                print(orig_problem_cols)
+
+                # Make a preview using original source column names for readability
+                dup_df_preview = dup_df.copy()
+
+                if len(orig_problem_cols) == dup_df_preview.shape[1]:
+                    dup_df_preview.columns = orig_problem_cols
+                else:
+                    # fallback if counts mismatch for any reason
+                    dup_df_preview.columns = [
+                        f"{dup_col}__copy{i+1}" for i in range(dup_df_preview.shape[1])
+                    ]
+
+                print("\nFirst 10 rows of duplicate columns:")
+                print(dup_df_preview.head(10))
+
+                raise ValueError(
+                    f"Duplicate column '{dup_col}' found after renaming, and the duplicate columns are not identical.\n"
+                    f"Original columns mapping to '{dup_col}': {orig_problem_cols}"
+                )
+
+        # If all duplicate columns were identical, drop duplicate copies
+        full_sc_data = full_sc_data.loc[:, ~full_sc_data.columns.duplicated()].copy()
 
 
     # ------------------------------------------------------------------
