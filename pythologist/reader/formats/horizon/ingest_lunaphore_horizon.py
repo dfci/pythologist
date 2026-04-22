@@ -14,6 +14,8 @@
 
 # Changes:
 # Update 2026/04/06: Adjust microns to pixel conversion so that is it not hard coded. Also transform microns into pixels
+# Update 2026/04/21: Adjust so we aren't modifying views of slices of dataframes
+# Update 2026/04/22: Add warning if there are duplicate column names in single cell export
 
 # TODO: process single cell data the same way the cdf is processed
 # TODO: are we happy with what intensity value is grabbed for each marker? Default is cell
@@ -1327,6 +1329,24 @@ def export_comprehensive_single_cell(temp_input_cells, cdf, savefile_dir, savefi
     }
 
     full_sc_data = full_sc_data.rename(columns=rename_dict)
+
+
+    # ---------------------------------------------------------
+    # Check for duplicate column names created by renaming
+    # ---------------------------------------------------------
+    from collections import Counter
+
+    duplicate_cols = [col for col, count in Counter(full_sc_data.columns).items() if count > 1]
+    if duplicate_cols:
+        warnings.warn(
+            f"Duplicate column names found after renaming in full single-cell export: {duplicate_cols}\n"
+            f"Keeping the first occurrence of each duplicate and dropping the rest."
+        )
+        full_sc_data = full_sc_data.loc[:, ~full_sc_data.columns.duplicated()].copy()
+
+    # ------------------------------------------------------------------
+    # 5. Add explicit pixel and micron versions of CDF spatial columns
+
 
     # ------------------------------------------------------------------
     # 5. Add explicit pixel and micron versions of CDF spatial columns
