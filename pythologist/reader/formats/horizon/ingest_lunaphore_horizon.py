@@ -1266,7 +1266,7 @@ def export_comprehensive_single_cell(temp_input_cells, cdf, savefile_dir, savefi
     savefile_name: name of the output CSV file (without extension)
     microns_per_pixel: scaling factor for converting between microns and pixels
     """
-   
+    
     # ------------------------------------------------------------------
     # 1. Pull useful processed CDF columns
     # ------------------------------------------------------------------
@@ -1323,6 +1323,37 @@ def export_comprehensive_single_cell(temp_input_cells, cdf, savefile_dir, savefi
     # ------------------------------------------------------------------
     sc_meta = extract_column_metadata(full_sc_data)
 
+    # ---------------------------------------------------------
+    # Drop the TRITC or Cy5 repeat measurements with no marker attached:
+    # Drop specific columns based on their WOULD-BE renamed names
+    # ---------------------------------------------------------
+    sc_meta = sc_meta.copy()
+    sc_meta['would_rename_to'] = sc_meta.apply(_create_consistent_column_name, axis=1)
+
+    cols_to_drop_by_would_name = {
+        'Nucleus_MeanIntensity_TRITC',
+        'Nucleus_MeanIntensity_Cy5',
+        'Cell_MeanIntensity_TRITC',
+        'Cell_MeanIntensity_Cy5',
+        'Cytoplasm_MeanIntensity_TRITC',
+        'Cytoplasm_MeanIntensity_Cy5',
+    }
+
+    drop_mask = sc_meta['would_rename_to'].isin(cols_to_drop_by_would_name)
+    cols_to_drop = sc_meta.loc[drop_mask, 'orig_cols'].tolist()
+
+    print("Columns selected for dropping before renaming:")
+    print(cols_to_drop)
+
+    if cols_to_drop:
+        warnings.warn(
+            "Dropping selected Mean Intensity columns from full single-cell export:\n"
+            + "\n".join(cols_to_drop)
+        )
+        full_sc_data = full_sc_data.drop(columns=cols_to_drop, errors='ignore')
+        sc_meta = sc_meta.loc[~drop_mask].copy()
+
+    #
     rename_dict = {
         row['orig_cols']: _create_consistent_column_name(row)
         for _, row in sc_meta.iterrows()
