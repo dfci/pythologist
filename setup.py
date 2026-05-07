@@ -8,7 +8,7 @@ with open(path.join(this_folder,'README.md'),encoding='utf-8') as inf:
 
 setup(
   name='pythologist',
-  version='2.1.1',
+  version='20260507',
   test_suite='nose2.collector.collector',
   description='inForm PerkinElmer Reader - Python interface to read outputs of the PerkinElmer inForm software;\
     Pythologist-image-utilities: Functions to assist in working with image files;\
