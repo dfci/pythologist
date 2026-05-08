@@ -23,6 +23,7 @@
 # TODO: change to merging on stable indexes
 # TODO: change microns to pixels conversion to be earlier in the process
 # TODO: remove troubleshooting print statements
+# TODO: is the index for pythologist really implemented correctly?
 
 import pandas as pd
 import numpy as np
@@ -1266,7 +1267,7 @@ def export_comprehensive_single_cell(temp_input_cells, cdf, savefile_dir, savefi
     savefile_name: name of the output CSV file (without extension)
     microns_per_pixel: scaling factor for converting between microns and pixels
     """
-    
+
     # ------------------------------------------------------------------
     # 1. Pull useful processed CDF columns
     # ------------------------------------------------------------------
