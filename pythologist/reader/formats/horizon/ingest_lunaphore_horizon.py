@@ -17,13 +17,13 @@
 # Update 2026/04/21: Adjust so we aren't modifying views of slices of dataframes
 # Update 2026/04/22: Add warning if there are duplicate column names in single cell export
 
-# TODO: process single cell data the same way the cdf is processed
-# TODO: are we happy with what intensity value is grabbed for each marker? Default is cell
+# TODO: Neighborhood analysis efficiency
+# TODO: Merge/join efficiency
 # TODO: frame dimensions
 # TODO: change to merging on stable indexes
-# TODO: change microns to pixels conversion to be earlier in the process
 # TODO: remove troubleshooting print statements
 # TODO: is the index for pythologist really implemented correctly?
+# TODO: For meta data handling, clean up ")" etc that comes when there is no marker or some other issue (see Haq/Fischer TMA for examples of this issue)
 
 import pandas as pd
 import numpy as np
