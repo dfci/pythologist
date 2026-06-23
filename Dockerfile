@@ -74,10 +74,8 @@ RUN mkdir -p /home/$user/.local \
     && chown -R $user:$group /home/$user/.local /home/$user/.jupyter /work
 
 # Create necessary directories with appropriate permissions
-#RUN mkdir -p /.local /.jupyter /.cache \
-#    && chmod -R 777 /.local /.jupyter /.cache
-RUN mkdir -p /home/$user/.local /home/$user/.jupyter /work \
-    && chown -R $user:$group /home/$user/.local /home/$user/.jupyter /work /source
+RUN mkdir -p /.local /.jupyter /.cache \
+    && chmod -R 777 /.local /.jupyter /.cache
 
 # Switch to the new user
 USER $user
@@ -86,5 +84,4 @@ USER $user
 WORKDIR /work
 
 # Command to start JupyterLab
-#CMD ["jupyter", "lab", "--ip=0.0.0.0", "--port=8888", "--allow-root"]
-CMD ["jupyter", "lab", "--ip=0.0.0.0", "--port=8888"]
+CMD ["jupyter", "lab", "--ip=0.0.0.0", "--port=8888", "--allow-root"]
