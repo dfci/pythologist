@@ -12,7 +12,6 @@ RUN apt-get update \
                nano \
                wget \
                git \
-               r-base \
                build-essential \
                sudo \
                libhdf5-dev \
@@ -23,11 +22,10 @@ RUN apt-get update \
 RUN python3 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Upgrade pip and setuptools inside the virtual environment
-RUN pip install --upgrade pip==26.0.1 setuptools==82.0.0
-
 # Install Python packages inside the virtual environment
-RUN pip install pandas==2.3.3 \
+RUN pip install --no-cache-dir --upgrade pip==26.0.1 setuptools==82.0.0 \
+    && pip install --no-cache-dir \
+                pandas==2.3.3 \
                 numpy==1.26.4 \
                 scipy \
                 h5py==3.15.1 \
@@ -42,7 +40,14 @@ RUN pip install pandas==2.3.3 \
                 jsonschema \
                 opencv-python-headless \
                 pythologist-test-images \
-                pyarrow
+                pyarrow \
+                jupyterlab \
+                matplotlib \
+                plotnine[all] \
+                seaborn \
+                zarr \
+                ome-zarr \
+                dask
 
 # Create a user with specific user_id and group_id
 ARG user=jupyter_user
@@ -54,23 +59,13 @@ RUN groupadd -g $group_id $group \
     && useradd -l -u $user_id -ms /bin/bash -g $group $user \
     && usermod -a -G $group $user
 
-# Install additional Python packages inside the virtual environment
-RUN pip install jupyterlab \
-    && pip install matplotlib \
-    && pip install plotnine[all] \
-    && pip install seaborn 
-
-# Clone and install the 'good-neighbors' repository inside the virtual environment
+# Clone, build, and install custom packages
 RUN mkdir /source \
-    && cd /source \
-    && git clone https://github.com/jason-weirather/good-neighbors.git \
-    && cd good-neighbors \
-    && pip install -e .
+    && git clone https://github.com/jason-weirather/good-neighbors.git /source/good-neighbors \
+    && pip install --no-cache-dir -e /source/good-neighbors
 
-# Add and install your own package inside the virtual environment
 ADD . /source/pythologist
-RUN cd /source/pythologist \
-    && pip install .
+RUN pip install --no-cache-dir /source/pythologist
 
 # Create necessary directories with appropriate permissions
 RUN mkdir -p /home/$user/.local \
@@ -79,8 +74,10 @@ RUN mkdir -p /home/$user/.local \
     && chown -R $user:$group /home/$user/.local /home/$user/.jupyter /work
 
 # Create necessary directories with appropriate permissions
-RUN mkdir -p /.local /.jupyter /.cache \
-    && chmod -R 777 /.local /.jupyter /.cache
+#RUN mkdir -p /.local /.jupyter /.cache \
+#    && chmod -R 777 /.local /.jupyter /.cache
+RUN mkdir -p /home/$user/.local /home/$user/.jupyter /work \
+    && chown -R $user:$group /home/$user/.local /home/$user/.jupyter /work /source
 
 # Switch to the new user
 USER $user
@@ -89,5 +86,5 @@ USER $user
 WORKDIR /work
 
 # Command to start JupyterLab
-CMD ["jupyter", "lab", "--ip=0.0.0.0", "--port=8888", "--allow-root"]
-
+#CMD ["jupyter", "lab", "--ip=0.0.0.0", "--port=8888", "--allow-root"]
+CMD ["jupyter", "lab", "--ip=0.0.0.0", "--port=8888"]
